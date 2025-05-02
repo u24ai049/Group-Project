@@ -378,18 +378,132 @@
                 </div>
             </section>
 
-            <!-- Placeholder Sections -->
+            <!-- Inventory Section -->
             <section id="inventory" class="content-section">
                 <h2>Inventory</h2>
-                <p>Inventory management coming soon...</p>
+                <div class="filters">
+                    <div class="search-filter">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="inventory-search" placeholder="Search inventory...">
+                    </div>
+                    <div class="filter-group">
+                        <label for="inventory-category">Category:</label>
+                        <select id="inventory-category">
+                            <option value="all">All</option>
+                            <option value="Medication">Medication</option>
+                            <option value="Equipment">Equipment</option>
+                            <option value="Supplies">Supplies</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" id="add-inventory-btn"><i class="fas fa-plus"></i> Add Item</button>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Inventory List</h3>
+                        <button class="btn btn-sm"><i class="fas fa-download"></i> Export</button>
+                    </div>
+                    <div class="card-body">
+                        <table class="data-table" id="inventory-table">
+                            <thead>
+                                <tr>
+                                    <th>Item ID</th>
+                                    <th>Name</th>
+                                    <th>Category</th>
+                                    <th>Quantity</th>
+                                    <th>Unit Price</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
             </section>
+
+            <!-- Wards Section -->
             <section id="wards" class="content-section">
                 <h2>Wards</h2>
-                <p>Ward management coming soon...</p>
+                <div class="filters">
+                    <div class="search-filter">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="ward-search" placeholder="Search wards...">
+                    </div>
+                    <div class="filter-group">
+                        <label for="ward-status">Status:</label>
+                        <select id="ward-status">
+                            <option value="all">All</option>
+                            <option value="available">Available</option>
+                            <option value="occupied">Occupied</option>
+                            <option value="maintenance">Maintenance</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" id="add-ward-btn"><i class="fas fa-plus"></i> Add Ward</button>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Ward List</h3>
+                        <button class="btn btn-sm"><i class="fas fa-download"></i> Export</button>
+                    </div>
+                    <div class="card-body">
+                        <table class="data-table" id="wards-table">
+                            <thead>
+                                <tr>
+                                    <th>Ward ID</th>
+                                    <th>Ward Number</th>
+                                    <th>Type</th>
+                                    <th>Capacity</th>
+                                    <th>Occupied</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
             </section>
+
+            <!-- Billing Section -->
             <section id="billing" class="content-section">
                 <h2>Billing</h2>
-                <p>Billing management coming soon...</p>
+                <div class="filters">
+                    <div class="search-filter">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="billing-search" placeholder="Search bills...">
+                    </div>
+                    <div class="filter-group">
+                        <label for="billing-status">Status:</label>
+                        <select id="billing-status">
+                            <option value="all">All</option>
+                            <option value="pending">Pending</option>
+                            <option value="paid">Paid</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" id="add-bill-btn"><i class="fas fa-plus"></i> Add Bill</button>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Billing List</h3>
+                        <button class="btn btn-sm"><i class="fas fa-download"></i> Export</button>
+                    </div>
+                    <div class="card-body">
+                        <table class="data-table" id="bills-table">
+                            <thead>
+                                <tr>
+                                    <th>Bill ID</th>
+                                    <th>Patient</th>
+                                    <th>Amount</th>
+                                    <th>Date</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
             </section>
 
             <!-- Modals -->
@@ -652,6 +766,155 @@
                             <div class="form-group">
                                 <label for="staff-phone">Phone</label>
                                 <input type="tel" id="staff-phone">
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary close-modal">Cancel</button>
+                                <button type="submit" class="btn btn-primary">Save</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inventory Modal -->
+            <div class="modal" id="inventory-modal">
+                <div class="modal-dialog">
+                    <div class="modal-header">
+                        <h3>Add New Inventory Item</h3>
+                        <button class="close-btn">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="inventory-form">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="inventory-name">Item Name</label>
+                                    <input type="text" id="inventory-name" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="inventory-category-select">Category</label>
+                                    <select id="inventory-category-select" required>
+                                        <option value="">Select Category</option>
+                                        <option value="Medication">Medication</option>
+                                        <option value="Equipment">Equipment</option>
+                                        <option value="Supplies">Supplies</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="inventory-quantity">Quantity</label>
+                                    <input type="number" id="inventory-quantity" min="0" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="inventory-unit-price">Unit Price ($)</label>
+                                    <input type="number" id="inventory-unit-price" min="0" step="0.01" required>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="inventory-description">Description</label>
+                                <textarea id="inventory-description"></textarea>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary close-modal">Cancel</button>
+                                <button type="submit" class="btn btn-primary">Save</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ward Modal -->
+            <div class="modal" id="ward-modal">
+                <div class="modal-dialog">
+                    <div class="modal-header">
+                        <h3>Add New Ward</h3>
+                        <button class="close-btn">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="ward-form">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="ward-number">Ward Number</label>
+                                    <input type="text" id="ward-number" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="ward-type">Type</label>
+                                    <select id="ward-type" required>
+                                        <option value="">Select Type</option>
+                                        <option value="General">General</option>
+                                        <option value="ICU">ICU</option>
+                                        <option value="Pediatric">Pediatric</option>
+                                        <option value="Surgical">Surgical</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="ward-capacity">Capacity</label>
+                                    <input type="number" id="ward-capacity" min="1" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="ward-status-select">Status</label>
+                                    <select id="ward-status-select" required>
+                                        <option value="available">Available</option>
+                                        <option value="occupied">Occupied</option>
+                                        <option value="maintenance">Maintenance</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="ward-patient">Assigned Patient</label>
+                                <select id="ward-patient">
+                                    <option value="">No Patient</option>
+                                </select>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary close-modal">Cancel</button>
+                                <button type="submit" class="btn btn-primary">Save</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Billing Modal -->
+            <div class="modal" id="bill-modal">
+                <div class="modal-dialog">
+                    <div class="modal-header">
+                        <h3>Add New Bill</h3>
+                        <button class="close-btn">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="bill-form">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="bill-patient">Patient</label>
+                                    <select id="bill-patient" required>
+                                        <option value="">Select Patient</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="bill-date">Date</label>
+                                    <input type="date" id="bill-date" required>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="bill-amount">Amount ($)</label>
+                                    <input type="number" id="bill-amount" min="0" step="0.01" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="bill-status-select">Status</label>
+                                    <select id="bill-status-select" required>
+                                        <option value="pending">Pending</option>
+                                        <option value="paid">Paid</option>
+                                        <option value="cancelled">Cancelled</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="bill-description">Description</label>
+                                <textarea id="bill-description" required></textarea>
                             </div>
                             <div class="form-actions">
                                 <button type="button" class="btn btn-secondary close-modal">Cancel</button>
