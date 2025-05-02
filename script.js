@@ -72,6 +72,11 @@ function formatDateTime(dateTimeStr) {
     });
 }
 
+function formatCurrency(amount) {
+    if (!amount && amount !== 0) return 'N/A';
+    return `$${parseFloat(amount).toFixed(2)}`;
+}
+
 function addActivity(message) {
     const activity = {
         message,
@@ -102,12 +107,18 @@ function init() {
     setupMedicalRecordManagement();
     setupDoctorManagement();
     setupStaffManagement();
+    setupInventoryManagement();
+    setupWardManagement();
+    setupBillingManagement();
     updateDashboard();
     loadPatientsTable();
     loadAppointmentsTable();
     loadMedicalRecordsTable();
     loadDoctorsTable();
     loadStaffTable();
+    loadInventoryTable();
+    loadWardsTable();
+    loadBillsTable();
     populatePatientSelects();
     populateDoctorSelects();
     showSection('dashboard');
@@ -181,11 +192,51 @@ function loadSampleData() {
             updatedAt: new Date().toISOString()
         }
     ];
+    inventory = [
+        {
+            id: generateId(),
+            name: 'Aspirin',
+            category: 'Medication',
+            quantity: 100,
+            unitPrice: 0.10,
+            description: 'Pain relief medication',
+            status: 'available',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        }
+    ];
+    wards = [
+        {
+            id: generateId(),
+            number: '101',
+            type: 'General',
+            capacity: 4,
+            patientId: null,
+            status: 'available',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        }
+    ];
+    bills = [
+        {
+            id: generateId(),
+            patientId: patients[0].id,
+            amount: 150.00,
+            date: new Date().toISOString().split('T')[0],
+            description: 'Consultation fee',
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        }
+    ];
     localStorage.setItem('patients', JSON.stringify(patients));
     localStorage.setItem('doctors', JSON.stringify(doctors));
     localStorage.setItem('staff', JSON.stringify(staff));
     localStorage.setItem('appointments', JSON.stringify(appointments));
     localStorage.setItem('medicalRecords', JSON.stringify(medicalRecords));
+    localStorage.setItem('inventory', JSON.stringify(inventory));
+    localStorage.setItem('wards', JSON.stringify(wards));
+    localStorage.setItem('bills', JSON.stringify(bills));
 }
 
 // Navigation System
@@ -223,6 +274,91 @@ function updateBreadcrumb(sectionName) {
     }
 }
 
+// Dashboard Updates
+function updateDashboard() {
+    // Update stats
+    document.getElementById('total-patients').textContent = patients.length;
+    highlightUpdate('total-patients');
+
+    const today = new Date().toISOString().split('T')[0];
+    const todayAppointments = appointments.filter(a => a.date === today && a.status === 'scheduled').length;
+    document.getElementById('today-appointments').textContent = todayAppointments;
+    highlightUpdate('today-appointments');
+
+    const availableBeds = wards.filter(w => w.status === 'available').length;
+    document.getElementById('available-beds').textContent = availableBeds;
+    highlightUpdate('available-beds');
+
+    const totalRevenue = bills.reduce((sum, bill) => bill.status === 'paid' ? sum + bill.amount : sum, 0);
+    document.getElementById('revenue').textContent = formatCurrency(totalRevenue);
+    highlightUpdate('revenue');
+
+    // Update recent appointments
+    const recentAppointments = appointments
+        .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+        .slice(0, 5);
+    const recentAppointmentsTable = document.getElementById('recent-appointments');
+    if (recentAppointmentsTable) {
+        recentAppointmentsTable.innerHTML = recentAppointments.map(appointment => {
+            const patient = patients.find(p => p.id === appointment.patientId);
+            const doctor = doctors.find(d => d.id === appointment.doctorId);
+            return `
+                <tr>
+                    <td>${patient ? `${patient.firstName} ${patient.lastName}` : 'N/A'}</td>
+                    <td>${doctor ? `${doctor.firstName} ${doctor.lastName}` : 'N/A'}</td>
+                    <td>${formatTime(appointment.time)}</td>
+                    <td><span class="status-badge ${appointment.status}">${appointment.status}</span></td>
+                    <td>
+                        <button class="btn btn-sm" onclick="openAppointmentModal('${appointment.id}')">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // Update recent patients
+    const recentPatients = patients
+        .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+        .slice(0, 5);
+    const recentPatientsTable = document.getElementById('recent-patients');
+    if (recentPatientsTable) {
+        recentPatientsTable.innerHTML = recentPatients.map(patient => {
+            const lastRecord = medicalRecords
+                .filter(r => r.patientId === patient.id)
+                .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+            return `
+                <tr>
+                    <td>${patient.id}</td>
+                    <td>${patient.firstName} ${patient.lastName}</td>
+                    <td>${patient.gender?.charAt(0).toUpperCase() + patient.gender?.slice(1) || 'N/A'}</td>
+                    <td>${lastRecord ? formatDate(lastRecord.date) : 'N/A'}</td>
+                    <td>
+                        <button class="btn btn-sm" onclick="openPatientModal('${patient.id}')">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // Update activity log
+    const activityLogDiv = document.getElementById('activity-log');
+    if (activityLogDiv) {
+        activityLogDiv.innerHTML = activityLog.slice(0, 10).map(activity => `
+            <div class="activity-item">
+                <div class="activity-icon"><i class="fas fa-info-circle"></i></div>
+                <div class="activity-content">
+                    <div class="activity-message">${activity.message}</div>
+                    <div class="activity-time">${formatDateTime(activity.timestamp)}</div>
+                </div>
+            </div>
+        `).join('');
+    }
+}
+
 // Patient Management
 function setupPatientManagement() {
     const addPatientBtn = document.getElementById('add-patient-btn');
@@ -240,7 +376,7 @@ function setupPatientManagement() {
         });
     }
 
-    document.querySelectorAll('.close-btn, .close-modal').forEach(btn => {
+    document.querySelectorAll('#patient-modal .close-btn, #patient-modal .close-modal').forEach(btn => {
         btn.addEventListener('click', () => {
             closeModal('patient-modal');
         });
@@ -315,6 +451,7 @@ function savePatient() {
     localStorage.setItem('patients', JSON.stringify(patients));
     loadPatientsTable();
     updateDashboard();
+    populatePatientSelects();
     closeModal('patient-modal');
 }
 
@@ -324,8 +461,10 @@ function deletePatient(patientId) {
 
     const hasAppointments = appointments.some(a => a.patientId === patientId);
     const hasRecords = medicalRecords.some(r => r.patientId === patientId);
-    if (hasAppointments || hasRecords) {
-        alert('Cannot delete patient with existing appointments or medical records.');
+    const hasBills = bills.some(b => b.patientId === patientId);
+    const hasWard = wards.some(w => w.patientId === patientId);
+    if (hasAppointments || hasRecords || hasBills || hasWard) {
+        alert('Cannot delete patient with existing appointments, medical records, bills, or ward assignments.');
         return;
     }
 
@@ -335,6 +474,7 @@ function deletePatient(patientId) {
         addActivity(`Deleted patient: ${patient.firstName} ${patient.lastName}`);
         loadPatientsTable();
         updateDashboard();
+        populatePatientSelects();
     }
 }
 
@@ -438,23 +578,15 @@ function saveAppointment() {
         updatedAt: new Date().toISOString()
     };
 
-    const patient = patients.find(p => p.id === appointmentData.patientId);
-    const doctor = doctors.find(d => d.id === appointmentData.doctorId);
-
-    if (!patient || !doctor) {
-        alert('Invalid patient or doctor selected.');
-        return;
-    }
-
     if (appointmentId) {
         const index = appointments.findIndex(a => a.id === appointmentId);
         if (index !== -1) {
             appointments[index] = { ...appointments[index], ...appointmentData };
-            addActivity(`Updated appointment for ${patient.firstName} ${patient.lastName}`);
+            addActivity(`Updated appointment for patient ID: ${appointmentData.patientId}`);
         }
     } else {
         appointments.push(appointmentData);
-        addActivity(`Added new appointment for ${patient.firstName} ${patient.lastName}`);
+        addActivity(`Added new appointment for patient ID: ${appointmentData.patientId}`);
     }
 
     localStorage.setItem('appointments', JSON.stringify(appointments));
@@ -468,10 +600,9 @@ function deleteAppointment(appointmentId) {
     if (!appointment) return;
 
     if (confirm('Are you sure you want to delete this appointment?')) {
-        const patient = patients.find(p => p.id === appointment.patientId);
         appointments = appointments.filter(a => a.id !== appointmentId);
         localStorage.setItem('appointments', JSON.stringify(appointments));
-        addActivity(`Deleted appointment for ${patient?.firstName || 'N/A'} ${patient?.lastName || 'N/A'}`);
+        addActivity(`Deleted appointment ID: ${appointmentId}`);
         loadAppointmentsTable();
         updateDashboard();
     }
@@ -491,7 +622,7 @@ function loadAppointmentsTable() {
         row.innerHTML = `
             <td>${appointment.id}</td>
             <td>${patient ? `${patient.firstName} ${patient.lastName}` : 'N/A'}</td>
-            <td>${doctor ? `Dr. ${doctor.firstName} ${doctor.lastName}` : 'N/A'}</td>
+            <td>${doctor ? `${doctor.firstName} ${doctor.lastName}` : 'N/A'}</td>
             <td>${formatDate(appointment.date)}</td>
             <td>${formatTime(appointment.time)}</td>
             <td><span class="status-badge ${appointment.status}">${appointment.status}</span></td>
@@ -577,21 +708,15 @@ function saveMedicalRecord() {
         updatedAt: new Date().toISOString()
     };
 
-    const patient = patients.find(p => p.id === recordData.patientId);
-    if (!patient) {
-        alert('Invalid patient selected.');
-        return;
-    }
-
     if (recordId) {
         const index = medicalRecords.findIndex(r => r.id === recordId);
         if (index !== -1) {
             medicalRecords[index] = { ...medicalRecords[index], ...recordData };
-            addActivity(`Updated medical record for ${patient.firstName} ${patient.lastName}`);
+            addActivity(`Updated medical record for patient ID: ${recordData.patientId}`);
         }
     } else {
         medicalRecords.push(recordData);
-        addActivity(`Added new medical record for ${patient.firstName} ${patient.lastName}`);
+        addActivity(`Added new medical record for patient ID: ${recordData.patientId}`);
     }
 
     localStorage.setItem('medicalRecords', JSON.stringify(medicalRecords));
@@ -602,15 +727,12 @@ function saveMedicalRecord() {
 
 function deleteMedicalRecord(recordId) {
     const record = medicalRecords.find(r => r.id === recordId);
-    if (!record) { // Fixed syntax error from if (!!)
-        return;
-    }
+    if (!record) return;
 
     if (confirm('Are you sure you want to delete this medical record?')) {
-        const patient = patients.find(p => p.id === record.patientId);
         medicalRecords = medicalRecords.filter(r => r.id !== recordId);
         localStorage.setItem('medicalRecords', JSON.stringify(medicalRecords));
-        addActivity(`Deleted medical record for ${patient?.firstName || 'N/A'} ${patient?.lastName || 'N/A'}`);
+        addActivity(`Deleted medical record ID: ${recordId}`);
         loadMedicalRecordsTable();
         updateDashboard();
     }
@@ -726,7 +848,6 @@ function saveDoctor() {
     localStorage.setItem('doctors', JSON.stringify(doctors));
     loadDoctorsTable();
     populateDoctorSelects();
-    updateDashboard();
     closeModal('doctor-modal');
 }
 
@@ -734,8 +855,7 @@ function deleteDoctor(doctorId) {
     const doctor = doctors.find(d => d.id === doctorId);
     if (!doctor) return;
 
-    const hasAppointments = appointments.some(a => a.doctorId === doctorId);
-    if (hasAppointments) {
+    if (appointments.some(a => a.doctorId === doctorId)) {
         alert('Cannot delete doctor with existing appointments.');
         return;
     }
@@ -746,7 +866,6 @@ function deleteDoctor(doctorId) {
         addActivity(`Deleted doctor: ${doctor.firstName} ${doctor.lastName}`);
         loadDoctorsTable();
         populateDoctorSelects();
-        updateDashboard();
     }
 }
 
@@ -857,7 +976,6 @@ function saveStaff() {
 
     localStorage.setItem('staff', JSON.stringify(staff));
     loadStaffTable();
-    updateDashboard();
     closeModal('staff-modal');
 }
 
@@ -870,7 +988,6 @@ function deleteStaff(staffId) {
         localStorage.setItem('staff', JSON.stringify(staff));
         addActivity(`Deleted staff: ${staffMember.firstName} ${staffMember.lastName}`);
         loadStaffTable();
-        updateDashboard();
     }
 }
 
@@ -901,149 +1018,426 @@ function loadStaffTable() {
     });
 }
 
-// Dashboard Functions
-function updateDashboard() {
-    console.log('Updating dashboard...'); // Debug log
-
-    const totalPatients = document.getElementById('total-patients');
-    if (totalPatients) {
-        totalPatients.textContent = patients.length;
-        highlightUpdate('total-patients');
-    } else {
-        console.warn('Element #total-patients not found');
+// Inventory Management
+function setupInventoryManagement() {
+    const addInventoryBtn = document.getElementById('add-inventory-btn');
+    if (addInventoryBtn) {
+        addInventoryBtn.addEventListener('click', () => {
+            openInventoryModal();
+        });
     }
 
-    const today = new Date().toISOString().split('T')[0];
-    const todaysAppointments = appointments.filter(appt => appt.date === today).length;
-    const todayAppointments = document.getElementById('today-appointments');
-    if (todayAppointments) {
-        todayAppointments.textContent = todaysAppointments;
-        highlightUpdate('today-appointments');
-    } else {
-        console.warn('Element #today-appointments not found');
+    const inventoryForm = document.getElementById('inventory-form');
+    if (inventoryForm) {
+        inventoryForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            saveInventory();
+        });
     }
 
-    const totalBeds = 50;
-    const occupiedBeds = patients.filter(p => p.status === 'admitted').length;
-    const availableBeds = document.getElementById('available-beds');
-    if (availableBeds) {
-        availableBeds.textContent = totalBeds - occupiedBeds;
-        highlightUpdate('available-beds');
-    } else {
-        console.warn('Element #available-beds not found');
-    }
-
-    const revenueElement = document.getElementById('revenue');
-    if (revenueElement) {
-        revenueElement.textContent = 'N/A'; // Placeholder until bills are implemented
-        highlightUpdate('revenue');
-    } else {
-        console.warn('Element #revenue not found');
-    }
-
-    loadRecentAppointments();
-    loadRecentPatients();
-    loadActivityLog();
+    document.querySelectorAll('#inventory-modal .close-btn, #inventory-modal .close-modal').forEach(btn => {
+        btn.addEventListener('click', () => {
+            closeModal('inventory-modal');
+        });
+    });
 }
 
-function loadRecentAppointments() {
-    const container = document.getElementById('recent-appointments');
-    if (!container) {
-        console.warn('Element #recent-appointments not found');
+function openInventoryModal(itemId = null) {
+    const modal = document.getElementById('inventory-modal');
+    const form = document.getElementById('inventory-form');
+    if (!modal || !form) return;
+
+    if (itemId) {
+        const item = inventory.find(i => i.id === itemId);
+        if (item) {
+            document.getElementById('inventory-name').value = item.name;
+            document.getElementById('inventory-category-select').value = item.category;
+            document.getElementById('inventory-quantity').value = item.quantity;
+            document.getElementById('inventory-unit-price').value = item.unitPrice;
+            document.getElementById('inventory-description').value = item.description;
+
+            modal.querySelector('h3').textContent = 'Edit Inventory Item';
+            form.dataset.itemId = itemId;
+        }
+    } else {
+        form.reset();
+        modal.querySelector('h3').textContent = 'Add New Inventory Item';
+        delete form.dataset.itemId;
+    }
+
+    modal.classList.add('active');
+}
+
+function saveInventory() {
+    const form = document.getElementById('inventory-form');
+    if (!form) return;
+
+    const itemId = form.dataset.itemId;
+
+    const quantity = parseInt(document.getElementById('inventory-quantity').value);
+    const status = quantity <= 10 ? 'low' : 'available';
+
+    const inventoryData = {
+        id: itemId || generateId(),
+        name: document.getElementById('inventory-name').value,
+        category: document.getElementById('inventory-category-select').value,
+        quantity: quantity,
+        unitPrice: parseFloat(document.getElementById('inventory-unit-price').value),
+        description: document.getElementById('inventory-description').value,
+        status: status,
+        createdAt: itemId ? undefined : new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    };
+
+    if (itemId) {
+        const index = inventory.findIndex(i => i.id === itemId);
+        if (index !== -1) {
+            inventory[index] = { ...inventory[index], ...inventoryData };
+            addActivity(`Updated inventory item: ${inventoryData.name}`);
+        }
+    } else {
+        inventory.push(inventoryData);
+        addActivity(`Added new inventory item: ${inventoryData.name}`);
+    }
+
+    localStorage.setItem('inventory', JSON.stringify(inventory));
+    loadInventoryTable();
+    closeModal('inventory-modal');
+}
+
+function deleteInventory(itemId) {
+    const item = inventory.find(i => i.id === itemId);
+    if (!item) return;
+
+    if (confirm('Are you sure you want to delete this inventory item?')) {
+        inventory = inventory.filter(i => i.id !== itemId);
+        localStorage.setItem('inventory', JSON.stringify(inventory));
+        addActivity(`Deleted inventory item: ${item.name}`);
+        loadInventoryTable();
+    }
+}
+
+function loadInventoryTable() {
+    const tableBody = document.querySelector('#inventory-table tbody');
+    if (!tableBody) return;
+
+    tableBody.innerHTML = '';
+
+    inventory.forEach(item => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${item.id}</td>
+            <td>${item.name}</td>
+            <td>${item.category}</td>
+            <td>${item.quantity}</td>
+            <td>${formatCurrency(item.unitPrice)}</td>
+            <td><span class="status-badge ${item.status}">${item.status}</span></td>
+            <td>
+                <button class="btn btn-sm" onclick="openInventoryModal('${item.id}')">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="deleteInventory('${item.id}')">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        tableBody.appendChild(row);
+    });
+}
+
+// Ward Management
+function setupWardManagement() {
+    const addWardBtn = document.getElementById('add-ward-btn');
+    if (addWardBtn) {
+        addWardBtn.addEventListener('click', () => {
+            openWardModal();
+        });
+    }
+
+    const wardForm = document.getElementById('ward-form');
+    if (wardForm) {
+        wardForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            saveWard();
+        });
+    }
+
+    document.querySelectorAll('#ward-modal .close-btn, #ward-modal .close-modal').forEach(btn => {
+        btn.addEventListener('click', () => {
+            closeModal('ward-modal');
+        });
+    });
+}
+
+function openWardModal(wardId = null) {
+    const modal = document.getElementById('ward-modal');
+    const form = document.getElementById('ward-form');
+    if (!modal || !form) return;
+
+    populatePatientSelects();
+
+    if (wardId) {
+        const ward = wards.find(w => w.id === wardId);
+        if (ward) {
+            document.getElementById('ward-number').value = ward.number;
+            document.getElementById('ward-type').value = ward.type;
+            document.getElementById('ward-capacity').value = ward.capacity;
+            document.getElementById('ward-status-select').value = ward.status;
+            document.getElementById('ward-patient').value = ward.patientId || '';
+
+            modal.querySelector('h3').textContent = 'Edit Ward';
+            form.dataset.wardId = wardId;
+        }
+    } else {
+        form.reset();
+        modal.querySelector('h3').textContent = 'Add New Ward';
+        delete form.dataset.wardId;
+    }
+
+    modal.classList.add('active');
+}
+
+function saveWard() {
+    const form = document.getElementById('ward-form');
+    if (!form) return;
+
+    const wardId = form.dataset.wardId;
+
+    const wardData = {
+        id: wardId || generateId(),
+        number: document.getElementById('ward-number').value,
+        type: document.getElementById('ward-type').value,
+        capacity: parseInt(document.getElementById('ward-capacity').value),
+        patientId: document.getElementById('ward-patient').value || null,
+        status: document.getElementById('ward-status-select').value,
+        createdAt: wardId ? undefined : new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    };
+
+    if (wardData.patientId) {
+        wardData.status = 'occupied';
+    } else if (wardData.status === 'occupied') {
+        wardData.status = 'available';
+    }
+
+    if (wardData.patientId) {
+        const existingWard = wards.find(w => w.id !== wardId && w.patientId === wardData.patientId);
+        if (existingWard) {
+            alert('This patient is already assigned to another ward.');
+            return;
+        }
+    }
+
+    if (wardId) {
+        const index = wards.findIndex(w => w.id === wardId);
+        if (index !== -1) {
+            wards[index] = { ...wards[index], ...wardData };
+            addActivity(`Updated ward: ${wardData.number}`);
+        }
+    } else {
+        wards.push(wardData);
+        addActivity(`Added new ward: ${wardData.number}`);
+    }
+
+    localStorage.setItem('wards', JSON.stringify(wards));
+    loadWardsTable();
+    updateDashboard();
+    closeModal('ward-modal');
+}
+
+function deleteWard(wardId) {
+    const ward = wards.find(w => w.id === wardId);
+    if (!ward) return;
+
+    if (ward.patientId) {
+        alert('Cannot delete ward with assigned patient.');
         return;
     }
 
-    container.innerHTML = '';
+    if (confirm('Are you sure you want to delete this ward?')) {
+        wards = wards.filter(w => w.id !== wardId);
+        localStorage.setItem('wards', JSON.stringify(wards));
+        addActivity(`Deleted ward: ${ward.number}`);
+        loadWardsTable();
+        updateDashboard();
+    }
+}
 
-    const recentAppointments = [...appointments]
-        .sort((a, b) => new Date(b.date) - new Date(a.date))
-        .slice(0, 5);
+function loadWardsTable() {
+    const tableBody = document.querySelector('#wards-table tbody');
+    if (!tableBody) return;
 
-    recentAppointments.forEach(appt => {
-        const patient = patients.find(p => p.id === appt.patientId);
-        const doctor = doctors.find(d => d.id === appt.doctorId);
+    tableBody.innerHTML = '';
+
+    wards.forEach(ward => {
+        const patient = patients.find(p => p.id === ward.patientId);
+        const occupied = ward.patientId ? 1 : 0;
 
         const row = document.createElement('tr');
-        row.classList.add('updated'); // Highlight new/updated rows
-        setTimeout(() => row.classList.remove('updated'), 1000);
         row.innerHTML = `
+            <td>${ward.id}</td>
+            <td>${ward.number}</td>
+            <td>${ward.type}</td>
+            <td>${ward.capacity}</td>
+            <td>${occupied}</td>
+            <td><span class="status-badge ${ward.status}">${ward.status}</span></td>
+            <td>
+                <button class="btn btn-sm" onclick="openWardModal('${ward.id}')">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="deleteWard('${ward.id}')">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        tableBody.appendChild(row);
+    });
+}
+
+// Billing Management
+function setupBillingManagement() {
+    const addBillBtn = document.getElementById('add-bill-btn');
+    if (addBillBtn) {
+        addBillBtn.addEventListener('click', () => {
+            openBillModal();
+        });
+    }
+
+    const billForm = document.getElementById('bill-form');
+    if (billForm) {
+        billForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            saveBill();
+        });
+    }
+
+    document.querySelectorAll('#bill-modal .close-btn, #bill-modal .close-modal').forEach(btn => {
+        btn.addEventListener('click', () => {
+            closeModal('bill-modal');
+        });
+    });
+}
+
+function openBillModal(billId = null) {
+    const modal = document.getElementById('bill-modal');
+    const form = document.getElementById('bill-form');
+    if (!modal || !form) return;
+
+    populatePatientSelects();
+
+    if (billId) {
+        const bill = bills.find(b => b.id === billId);
+        if (bill) {
+            document.getElementById('bill-patient').value = bill.patientId;
+            document.getElementById('bill-date').value = bill.date;
+            document.getElementById('bill-amount').value = bill.amount;
+            document.getElementById('bill-status-select').value = bill.status;
+            document.getElementById('bill-description').value = bill.description;
+
+            modal.querySelector('h3').textContent = 'Edit Bill';
+            form.dataset.billId = billId;
+        }
+    } else {
+        form.reset();
+        modal.querySelector('h3').textContent = 'Add New Bill';
+        delete form.dataset.billId;
+    }
+
+    modal.classList.add('active');
+}
+
+function saveBill() {
+    const form = document.getElementById('bill-form');
+    if (!form) return;
+
+    const billId = form.dataset.billId;
+
+    const billData = {
+        id: billId || generateId(),
+        patientId: document.getElementById('bill-patient').value,
+        date: document.getElementById('bill-date').value,
+        amount: parseFloat(document.getElementById('bill-amount').value),
+        status: document.getElementById('bill-status-select').value,
+        description: document.getElementById('bill-description').value,
+        createdAt: billId ? undefined : new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    };
+
+    if (billId) {
+        const index = bills.findIndex(b => b.id === billId);
+        if (index !== -1) {
+            bills[index] = { ...bills[index], ...billData };
+            addActivity(`Updated bill for patient ID: ${billData.patientId}`);
+        }
+    } else {
+        bills.push(billData);
+        addActivity(`Added new bill for patient ID: ${billData.patientId}`);
+    }
+
+    localStorage.setItem('bills', JSON.stringify(bills));
+    loadBillsTable();
+    updateDashboard();
+    closeModal('bill-modal');
+}
+
+function deleteBill(billId) {
+    const bill = bills.find(b => b.id === billId);
+    if (!bill) return;
+
+    if (bill.status === 'paid') {
+        alert('Cannot delete a paid bill.');
+        return;
+    }
+
+    if (confirm('Are you sure you want to delete this bill?')) {
+        bills = bills.filter(b => b.id !== billId);
+        localStorage.setItem('bills', JSON.stringify(bills));
+        addActivity(`Deleted bill ID: ${billId}`);
+        loadBillsTable();
+        updateDashboard();
+    }
+}
+
+function loadBillsTable() {
+    const tableBody = document.querySelector('#bills-table tbody');
+    if (!tableBody) return;
+
+    tableBody.innerHTML = '';
+
+    bills.forEach(bill => {
+        const patient = patients.find(p => p.id === bill.patientId);
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${bill.id}</td>
             <td>${patient ? `${patient.firstName} ${patient.lastName}` : 'N/A'}</td>
-            <td>${doctor ? `Dr. ${doctor.firstName} ${doctor.lastName}` : 'N/A'}</td>
-            <td>${formatTime(appt.time)}</td>
-            <td><span class="status-badge ${appt.status}">${appt.status}</span></td>
+            <td>${formatCurrency(bill.amount)}</td>
+            <td>${formatDate(bill.date)}</td>
+            <td><span class="status-badge ${bill.status}">${bill.status}</span></td>
             <td>
-                <button class="btn btn-sm" onclick="openAppointmentModal('${appt.id}')">
-                    <i class="fas fa-eye"></i>
+                <button class="btn btn-sm" onclick="openBillModal('${bill.id}')">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="deleteBill('${bill.id}')">
+                    <i class="fas fa-trash"></i>
                 </button>
             </td>
         `;
-        container.appendChild(row);
-    });
-}
-
-function loadRecentPatients() {
-    const container = document.getElementById('recent-patients');
-    if (!container) {
-        console.warn('Element #recent-patients not found');
-        return;
-    }
-
-    container.innerHTML = '';
-
-    const recentPatients = [...patients]
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-        .slice(0, 5);
-
-    recentPatients.forEach(patient => {
-        const lastVisit = medicalRecords
-            .filter(r => r.patientId === patient.id)
-            .sort((a, b) => new Date(b.date) - new Date(a.date))[0]?.date;
-
-        const row = document.createElement('tr');
-        row.classList.add('updated'); // Highlight new/updated rows
-        setTimeout(() => row.classList.remove('updated'), 1000);
-        row.innerHTML = `
-            <td>${patient.id}</td>
-            <td>${patient.firstName} ${patient.lastName}</td>
-            <td>${patient.gender?.charAt(0).toUpperCase() + patient.gender?.slice(1) || 'N/A'}</td>
-            <td>${lastVisit ? formatDate(lastVisit) : 'N/A'}</td>
-            <td>
-                <button class="btn btn-sm" onclick="openPatientModal('${patient.id}')">
-                    <i class="fas fa-eye"></i>
-                </button>
-            </td>
-        `;
-        container.appendChild(row);
-    });
-}
-
-function loadActivityLog() {
-    const container = document.getElementById('activity-log');
-    if (!container) {
-        console.warn('Element #activity-log not found');
-        return;
-    }
-
-    container.innerHTML = '';
-
-    activityLog.slice(0, 5).forEach(activity => {
-        const div = document.createElement('div');
-        div.className = 'activity-item';
-        div.innerHTML = `
-            <div class="activity-icon"><i class="fas fa-bell"></i></div>
-            <div class="activity-content">
-                <div class="activity-message">${activity.message}</div>
-                <div class="activity-time">${formatDateTime(activity.timestamp)}</div>
-            </div>
-        `;
-        container.appendChild(div);
+        tableBody.appendChild(row);
     });
 }
 
 // Select Population
 function populatePatientSelects() {
-    const selects = document.querySelectorAll('#appointment-patient, #record-patient-select');
+    const selects = [
+        document.getElementById('appointment-patient'),
+        document.getElementById('record-patient-select'),
+        document.getElementById('bill-patient'),
+        document.getElementById('ward-patient')
+    ].filter(select => select);
+
     selects.forEach(select => {
+        const currentValue = select.value;
         select.innerHTML = '<option value="">Select Patient</option>';
         patients.forEach(patient => {
             const option = document.createElement('option');
@@ -1051,298 +1445,26 @@ function populatePatientSelects() {
             option.textContent = `${patient.firstName} ${patient.lastName}`;
             select.appendChild(option);
         });
+        select.value = currentValue;
     });
 }
 
 function populateDoctorSelects() {
     const select = document.getElementById('appointment-doctor');
-    if (select) {
-        select.innerHTML = '<option value="">Select Doctor</option>';
-        doctors.forEach(doctor => {
-            const option = document.createElement('option');
-            option.value = doctor.id;
-            option.textContent = `Dr. ${doctor.firstName} ${doctor.lastName} (${doctor.specialization})`;
-            select.appendChild(option);
-        });
-    }
+    if (!select) return;
+
+    const currentValue = select.value;
+    select.innerHTML = '<option value="">Select Doctor</option>';
+    doctors.forEach(doctor => {
+        const option = document.createElement('option');
+        option.value = doctor.id;
+        option.textContent = `${doctor.firstName} ${doctor.lastName} (${doctor.specialization})`;
+        select.appendChild(option);
+    });
+    select.value = currentValue;
 }
 
-// Search and Filters
-function setupSearchAndFilters() {
-    const patientSearch = document.getElementById('patient-search');
-    if (patientSearch) {
-        patientSearch.addEventListener('input', () => {
-            filterPatients();
-        });
-    }
-
-    const patientStatus = document.getElementById('patient-status');
-    if (patientStatus) {
-        patientStatus.addEventListener('change', filterPatients);
-    }
-
-    const patientGender = document.getElementById('patient-gender-filter');
-    if (patientGender) {
-        patientGender.addEventListener('change', filterPatients);
-    }
-
-    const appointmentSearch = document.getElementById('appointment-search');
-    if (appointmentSearch) {
-        appointmentSearch.addEventListener('input', () => {
-            filterAppointments();
-        });
-    }
-
-    const appointmentStatus = document.getElementById('appointment-status');
-    if (appointmentStatus) {
-        appointmentStatus.addEventListener('change', filterAppointments);
-    }
-
-    const recordSearch = document.getElementById('record-search');
-    if (recordSearch) {
-        recordSearch.addEventListener('input', () => {
-            filterMedicalRecords();
-        });
-    }
-
-    const recordPatient = document.getElementById('record-patient');
-    if (recordPatient) {
-        recordPatient.addEventListener('change', filterMedicalRecords);
-    }
-
-    const doctorSearch = document.getElementById('doctor-search');
-    if (doctorSearch) {
-        doctorSearch.addEventListener('input', () => {
-            filterDoctors();
-        });
-    }
-
-    const doctorSpecialization = document.getElementById('doctor-specialization');
-    if (doctorSpecialization) {
-        doctorSpecialization.addEventListener('change', filterDoctors);
-    }
-
-    const staffSearch = document.getElementById('staff-search');
-    if (staffSearch) {
-        staffSearch.addEventListener('input', () => {
-            filterStaff();
-        });
-    }
-
-    const staffRole = document.getElementById('staff-role');
-    if (staffRole) {
-        staffRole.addEventListener('change', filterStaff);
-    }
-}
-
-function filterPatients() {
-    const search = document.getElementById('patient-search')?.value.toLowerCase() || '';
-    const status = document.getElementById('patient-status')?.value || 'all';
-    const gender = document.getElementById('patient-gender-filter')?.value || 'all';
-
-    const filteredPatients = patients.filter(patient => {
-        const fullName = `${patient.firstName} ${patient.lastName}`.toLowerCase();
-        const matchesSearch = fullName.includes(search) || patient.id.toLowerCase().includes(search);
-        const matchesStatus = status === 'all' || patient.status === status;
-        const matchesGender = gender === 'all' || patient.gender === gender;
-        return matchesSearch && matchesStatus && matchesGender;
-    });
-
-    const tableBody = document.querySelector('#patients-table tbody');
-    if (!tableBody) return;
-
-    tableBody.innerHTML = '';
-
-    filteredPatients.forEach(patient => {
-        const age = patient.dob ? calculateAge(patient.dob) : 'N/A';
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${patient.id}</td>
-            <td>${patient.firstName} ${patient.lastName}</td>
-            <td>${age}</td>
-            <td>${patient.gender?.charAt(0).toUpperCase() + patient.gender?.slice(1) || 'N/A'}</td>
-            <td>${patient.phone || 'N/A'}</td>
-            <td><span class="status-badge ${patient.status}">${patient.status}</span></td>
-            <td>
-                <button class="btn btn-sm" onclick="openPatientModal('${patient.id}')">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn btn-sm btn-danger" onclick="deletePatient('${patient.id}')">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
-        `;
-        tableBody.appendChild(row);
-    });
-}
-
-function filterAppointments() {
-    const search = document.getElementById('appointment-search')?.value.toLowerCase() || '';
-    const status = document.getElementById('appointment-status')?.value || 'all';
-
-    const filteredAppointments = appointments.filter(appointment => {
-        const patient = patients.find(p => p.id === appointment.patientId);
-        const doctor = doctors.find(d => d.id === appointment.doctorId);
-        const patientName = patient ? `${patient.firstName} ${patient.lastName}`.toLowerCase() : '';
-        const doctorName = doctor ? `${doctor.firstName} ${doctor.lastName}`.toLowerCase() : '';
-        const matchesSearch = patientName.includes(search) || doctorName.includes(search) || appointment.id.toLowerCase().includes(search);
-        const matchesStatus = status === 'all' || appointment.status === status;
-        return matchesSearch && matchesStatus;
-    });
-
-    const tableBody = document.querySelector('#appointments-table tbody');
-    if (!tableBody) return;
-
-    tableBody.innerHTML = '';
-
-    filteredAppointments.forEach(appointment => {
-        const patient = patients.find(p => p.id === appointment.patientId);
-        const doctor = doctors.find(d => d.id === appointment.doctorId);
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${appointment.id}</td>
-            <td>${patient ? `${patient.firstName} ${patient.lastName}` : 'N/A'}</td>
-            <td>${doctor ? `Dr. ${doctor.firstName} ${doctor.lastName}` : 'N/A'}</td>
-            <td>${formatDate(appointment.date)}</td>
-            <td>${formatTime(appointment.time)}</td>
-            <td><span class="status-badge ${appointment.status}">${appointment.status}</span></td>
-            <td>
-                <button class="btn btn-sm" onclick="openAppointmentModal('${appointment.id}')">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn btn-sm btn-danger" onclick="deleteAppointment('${appointment.id}')">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
-        `;
-        tableBody.appendChild(row);
-    });
-}
-
-function filterMedicalRecords() {
-    const search = document.getElementById('record-search')?.value.toLowerCase() || '';
-    const patientId = document.getElementById('record-patient')?.value || 'all';
-
-    const filteredRecords = medicalRecords.filter(record => {
-        const patient = patients.find(p => p.id === record.patientId);
-        const patientName = patient ? `${patient.firstName} ${patient.lastName}`.toLowerCase() : '';
-        const matchesSearch = patientName.includes(search) || record.diagnosis.toLowerCase().includes(search) || record.id.toLowerCase().includes(search);
-        const matchesPatient = patientId === 'all' || record.patientId === patientId;
-        return matchesSearch && matchesPatient;
-    });
-
-    const tableBody = document.querySelector('#records-table tbody');
-    if (!tableBody) return;
-
-    tableBody.innerHTML = '';
-
-    filteredRecords.forEach(record => {
-        const patient = patients.find(p => p.id === record.patientId);
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${record.id}</td>
-            <td>${patient ? `${patient.firstName} ${patient.lastName}` : 'N/A'}</td>
-            <td>${formatDate(record.date)}</td>
-            <td>${record.diagnosis}</td>
-            <td>${record.treatment}</td>
-            <td>
-                <button class="btn btn-sm" onclick="openMedicalRecordModal('${record.id}')">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn btn-sm btn-danger" onclick="deleteMedicalRecord('${record.id}')">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
-        `;
-        tableBody.appendChild(row);
-    });
-}
-
-function filterDoctors() {
-    const search = document.getElementById('doctor-search')?.value.toLowerCase() || '';
-    const specialization = document.getElementById('doctor-specialization')?.value || 'all';
-
-    const filteredDoctors = doctors.filter(doctor => {
-        const fullName = `${doctor.firstName} ${doctor.lastName}`.toLowerCase();
-        const matchesSearch = fullName.includes(search) || doctor.id.toLowerCase().includes(search);
-        const matchesSpecialization = specialization === 'all' || doctor.specialization === specialization;
-        return matchesSearch && matchesSpecialization;
-    });
-
-    const tableBody = document.querySelector('#doctors-table tbody');
-    if (!tableBody) return;
-
-    tableBody.innerHTML = '';
-
-    filteredDoctors.forEach(doctor => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${doctor.id}</td>
-            <td>${doctor.firstName} ${doctor.lastName}</td>
-            <td>${doctor.specialization}</td>
-            <td>${doctor.phone || 'N/A'}</td>
-            <td>${doctor.email || 'N/A'}</td>
-            <td>
-                <button class="btn btn-sm" onclick="openDoctorModal('${doctor.id}')">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn btn-sm btn-danger" onclick="deleteDoctor('${doctor.id}')">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
-        `;
-        tableBody.appendChild(row);
-    });
-}
-
-function filterStaff() {
-    const search = document.getElementById('staff-search')?.value.toLowerCase() || '';
-    const role = document.getElementById('staff-role')?.value || 'all';
-
-    const filteredStaff = staff.filter(staffMember => {
-        const fullName = `${staffMember.firstName} ${staffMember.lastName}`.toLowerCase();
-        const matchesSearch = fullName.includes(search) || staffMember.id.toLowerCase().includes(search);
-        const matchesRole = role === 'all' || staffMember.role === role;
-        return matchesSearch && matchesRole;
-    });
-
-    const tableBody = document.querySelector('#staff-table tbody');
-    if (!tableBody) return;
-
-    tableBody.innerHTML = '';
-
-    filteredStaff.forEach(staffMember => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${staffMember.id}</td>
-            <td>${staffMember.firstName} ${staffMember.lastName}</td>
-            <td>${staffMember.role}</td>
-            <td>${staffMember.department}</td>
-            <td>${staffMember.phone || 'N/A'}</td>
-            <td>
-                <button class="btn btn-sm" onclick="openStaffModal('${staffMember.id}')">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn btn-sm btn-danger" onclick="deleteStaff('${staffMember.id}')">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
-        `;
-        tableBody.appendChild(row);
-    });
-}
-
-// Modal Interactions
-function setupModalInteractions() {
-    document.querySelectorAll('.modal').forEach(modal => {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                closeModal(modal.id);
-            }
-        });
-    });
-}
-
+// Modal Management
 function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
@@ -1350,35 +1472,479 @@ function closeModal(modalId) {
     }
 }
 
-// Notifications
+// Search and Filter Setup
+function setupSearchAndFilters() {
+    // Patient Filters
+    const patientSearch = document.getElementById('patient-search');
+    const patientStatus = document.getElementById('patient-status');
+    const patientGender = document.getElementById('patient-gender-filter');
+
+    if (patientSearch) {
+        patientSearch.addEventListener('input', filterPatients);
+    }
+    if (patientStatus) {
+        patientStatus.addEventListener('change', filterPatients);
+    }
+    if (patientGender) {
+        patientGender.addEventListener('change', filterPatients);
+    }
+
+    function filterPatients() {
+        const searchTerm = patientSearch.value.toLowerCase();
+        const statusFilter = patientStatus.value;
+        const genderFilter = patientGender.value;
+
+        const filteredPatients = patients.filter(patient => {
+            const fullName = `${patient.firstName} ${patient.lastName}`.toLowerCase();
+            return (
+                (fullName.includes(searchTerm) || patient.id.toLowerCase().includes(searchTerm)) &&
+                (statusFilter === 'all' || patient.status === statusFilter) &&
+                (genderFilter === 'all' || patient.gender === genderFilter)
+            );
+        });
+
+        const tableBody = document.querySelector('#patients-table tbody');
+        if (!tableBody) return;
+
+        tableBody.innerHTML = '';
+        filteredPatients.forEach(patient => {
+            const age = patient.dob ? calculateAge(patient.dob) : 'N/A';
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${patient.id}</td>
+                <td>${patient.firstName} ${patient.lastName}</td>
+                <td>${age}</td>
+                <td>${patient.gender?.charAt(0).toUpperCase() + patient.gender?.slice(1) || 'N/A'}</td>
+                <td>${patient.phone || 'N/A'}</td>
+                <td><span class="status-badge ${patient.status}">${patient.status}</span></td>
+                <td>
+                    <button class="btn btn-sm" onclick="openPatientModal('${patient.id}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="deletePatient('${patient.id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            tableBody.appendChild(row);
+        });
+    }
+
+    // Appointment Filters
+    const appointmentSearch = document.getElementById('appointment-search');
+    const appointmentStatus = document.getElementById('appointment-status');
+
+    if (appointmentSearch) {
+        appointmentSearch.addEventListener('input', filterAppointments);
+    }
+    if (appointmentStatus) {
+        appointmentStatus.addEventListener('change', filterAppointments);
+    }
+
+    function filterAppointments() {
+        const searchTerm = appointmentSearch.value.toLowerCase();
+        const statusFilter = appointmentStatus.value;
+
+        const filteredAppointments = appointments.filter(appointment => {
+            const patient = patients.find(p => p.id === appointment.patientId);
+            const doctor = doctors.find(d => d.id === appointment.doctorId);
+            const patientName = patient ? `${patient.firstName} ${patient.lastName}`.toLowerCase() : '';
+            const doctorName = doctor ? `${doctor.firstName} ${doctor.lastName}`.toLowerCase() : '';
+            return (
+                (patientName.includes(searchTerm) ||
+                 doctorName.includes(searchTerm) ||
+                 appointment.id.toLowerCase().includes(searchTerm)) &&
+                (statusFilter === 'all' || appointment.status === statusFilter)
+            );
+        });
+
+        const tableBody = document.querySelector('#appointments-table tbody');
+        if (!tableBody) return;
+
+        tableBody.innerHTML = '';
+        filteredAppointments.forEach(appointment => {
+            const patient = patients.find(p => p.id === appointment.patientId);
+            const doctor = doctors.find(d => d.id === appointment.doctorId);
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${appointment.id}</td>
+                <td>${patient ? `${patient.firstName} ${patient.lastName}` : 'N/A'}</td>
+                <td>${doctor ? `${doctor.firstName} ${doctor.lastName}` : 'N/A'}</td>
+                <td>${formatDate(appointment.date)}</td>
+                <td>${formatTime(appointment.time)}</td>
+                <td><span class="status-badge ${appointment.status}">${appointment.status}</span></td>
+                <td>
+                    <button class="btn btn-sm" onclick="openAppointmentModal('${appointment.id}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteAppointment('${appointment.id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            tableBody.appendChild(row);
+        });
+    }
+
+    // Medical Record Filters
+    const recordSearch = document.getElementById('record-search');
+    const recordPatient = document.getElementById('record-patient');
+
+    if (recordSearch) {
+        recordSearch.addEventListener('input', filterRecords);
+    }
+    if (recordPatient) {
+        recordPatient.addEventListener('change', filterRecords);
+    }
+
+    function filterRecords() {
+        const searchTerm = recordSearch.value.toLowerCase();
+        const patientFilter = recordPatient.value;
+
+        const filteredRecords = medicalRecords.filter(record => {
+            const patient = patients.find(p => p.id === record.patientId);
+            const patientName = patient ? `${patient.firstName} ${patient.lastName}`.toLowerCase() : '';
+            return (
+                (patientName.includes(searchTerm) ||
+                 record.diagnosis.toLowerCase().includes(searchTerm) ||
+                 record.treatment.toLowerCase().includes(searchTerm)) &&
+                (patientFilter === 'all' || record.patientId === patientFilter)
+            );
+        });
+
+        const tableBody = document.querySelector('#records-table tbody');
+        if (!tableBody) return;
+
+        tableBody.innerHTML = '';
+        filteredRecords.forEach(record => {
+            const patient = patients.find(p => p.id === record.patientId);
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${record.id}</td>
+                <td>${patient ? `${patient.firstName} ${patient.lastName}` : 'N/A'}</td>
+                <td>${formatDate(record.date)}</td>
+                <td>${record.diagnosis}</td>
+                <td>${record.treatment}</td>
+                <td>
+                    <button class="btn btn-sm" onclick="openMedicalRecordModal('${record.id}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteMedicalRecord('${record.id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            tableBody.appendChild(row);
+        });
+    }
+
+    // Doctor Filters
+    const doctorSearch = document.getElementById('doctor-search');
+    const doctorSpecialization = document.getElementById('doctor-specialization');
+
+    if (doctorSearch) {
+        doctorSearch.addEventListener('input', filterDoctors);
+    }
+    if (doctorSpecialization) {
+        doctorSpecialization.addEventListener('change', filterDoctors);
+    }
+
+    function filterDoctors() {
+        const searchTerm = doctorSearch.value.toLowerCase();
+        const specializationFilter = doctorSpecialization.value;
+
+        const filteredDoctors = doctors.filter(doctor => {
+            const fullName = `${doctor.firstName} ${doctor.lastName}`.toLowerCase();
+            return (
+                (fullName.includes(searchTerm) || doctor.id.toLowerCase().includes(searchTerm)) &&
+                (specializationFilter === 'all' || doctor.specialization === specializationFilter)
+            );
+        });
+
+        const tableBody = document.querySelector('#doctors-table tbody');
+        if (!tableBody) return;
+
+        tableBody.innerHTML = '';
+        filteredDoctors.forEach(doctor => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${doctor.id}</td>
+                <td>${doctor.firstName} ${doctor.lastName}</td>
+                <td>${doctor.specialization}</td>
+                <td>${doctor.phone || 'N/A'}</td>
+                <td>${doctor.email || 'N/A'}</td>
+                <td>
+                    <button class="btn btn-sm" onclick="openDoctorModal('${doctor.id}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteDoctor('${doctor.id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            tableBody.appendChild(row);
+        });
+    }
+
+    // Staff Filters
+    const staffSearch = document.getElementById('staff-search');
+    const staffRole = document.getElementById('staff-role');
+
+    if (staffSearch) {
+        staffSearch.addEventListener('input', filterStaff);
+    }
+    if (staffRole) {
+        staffRole.addEventListener('change', filterStaff);
+    }
+
+    function filterStaff() {
+        const searchTerm = staffSearch.value.toLowerCase();
+        const roleFilter = staffRole.value;
+
+        const filteredStaff = staff.filter(staffMember => {
+            const fullName = `${staffMember.firstName} ${staffMember.lastName}`.toLowerCase();
+            return (
+                (fullName.includes(searchTerm) || staffMember.id.toLowerCase().includes(searchTerm)) &&
+                (roleFilter === 'all' || staffMember.role === roleFilter)
+            );
+        });
+
+        const tableBody = document.querySelector('#staff-table tbody');
+        if (!tableBody) return;
+
+        tableBody.innerHTML = '';
+        filteredStaff.forEach(staffMember => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${staffMember.id}</td>
+                <td>${staffMember.firstName} ${staffMember.lastName}</td>
+                <td>${staffMember.role}</td>
+                <td>${staffMember.department}</td>
+                <td>${staffMember.phone || 'N/A'}</td>
+                <td>
+                    <button class="btn btn-sm" onclick="openStaffModal('${staffMember.id}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteStaff('${staffMember.id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            tableBody.appendChild(row);
+        });
+    }
+
+    // Inventory Filters
+    const inventorySearch = document.getElementById('inventory-search');
+    const inventoryCategory = document.getElementById('inventory-category');
+
+    if (inventorySearch) {
+        inventorySearch.addEventListener('input', filterInventory);
+    }
+    if (inventoryCategory) {
+        inventoryCategory.addEventListener('change', filterInventory);
+    }
+
+    function filterInventory() {
+        const searchTerm = inventorySearch.value.toLowerCase();
+        const categoryFilter = inventoryCategory.value;
+
+        const filteredInventory = inventory.filter(item => {
+            return (
+                (item.name.toLowerCase().includes(searchTerm) || item.id.toLowerCase().includes(searchTerm)) &&
+                (categoryFilter === 'all' || item.category === categoryFilter)
+            );
+        });
+
+        const tableBody = document.querySelector('#inventory-table tbody');
+        if (!tableBody) return;
+
+        tableBody.innerHTML = '';
+        filteredInventory.forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.id}</td>
+                <td>${item.name}</td>
+                <td>${item.category}</td>
+                <td>${item.quantity}</td>
+                <td>${formatCurrency(item.unitPrice)}</td>
+                <td><span class="status-badge ${item.status}">${item.status}</span></td>
+                <td>
+                    <button class="btn btn-sm" onclick="openInventoryModal('${item.id}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteInventory('${item.id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            tableBody.appendChild(row);
+        });
+    }
+
+    // Ward Filters
+    const wardSearch = document.getElementById('ward-search');
+    const wardStatus = document.getElementById('ward-status');
+
+    if (wardSearch) {
+        wardSearch.addEventListener('input', filterWards);
+    }
+    if (wardStatus) {
+        wardStatus.addEventListener('change', filterWards);
+    }
+
+    function filterWards() {
+        const searchTerm = wardSearch.value.toLowerCase();
+        const statusFilter = wardStatus.value;
+
+        const filteredWards = wards.filter(ward => {
+            const patient = patients.find(p => p.id === ward.patientId);
+            const patientName = patient ? `${patient.firstName} ${patient.lastName}`.toLowerCase() : '';
+            return (
+                (ward.number.toLowerCase().includes(searchTerm) ||
+                 ward.type.toLowerCase().includes(searchTerm) ||
+                 patientName.includes(searchTerm)) &&
+                (statusFilter === 'all' || ward.status === statusFilter)
+            );
+        });
+
+        const tableBody = document.querySelector('#wards-table tbody');
+        if (!tableBody) return;
+
+        tableBody.innerHTML = '';
+        filteredWards.forEach(ward => {
+            const patient = patients.find(p => p.id === ward.patientId);
+            const occupied = ward.patientId ? 1 : 0;
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${ward.id}</td>
+                <td>${ward.number}</td>
+                <td>${ward.type}</td>
+                <td>${ward.capacity}</td>
+                <td>${occupied}</td>
+                <td><span class="status-badge ${ward.status}">${ward.status}</span></td>
+                <td>
+                    <button class="btn btn-sm" onclick="openWardModal('${ward.id}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteWard('${ward.id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            tableBody.appendChild(row);
+        });
+    }
+
+    // Billing Filters
+    const billingSearch = document.getElementById('billing-search');
+    const billingStatus = document.getElementById('billing-status');
+
+    if (billingSearch) {
+        billingSearch.addEventListener('input', filterBills);
+    }
+    if (billingStatus) {
+        billingStatus.addEventListener('change', filterBills);
+    }
+
+    function filterBills() {
+        const searchTerm = billingSearch.value.toLowerCase();
+        const statusFilter = billingStatus.value;
+
+        const filteredBills = bills.filter(bill => {
+            const patient = patients.find(p => p.id === bill.patientId);
+            const patientName = patient ? `${patient.firstName} ${patient.lastName}`.toLowerCase() : '';
+            return (
+                (patientName.includes(searchTerm) ||
+                 bill.id.toLowerCase().includes(searchTerm) ||
+                 bill.description.toLowerCase().includes(searchTerm)) &&
+                (statusFilter === 'all' || bill.status === statusFilter)
+            );
+        });
+
+        const tableBody = document.querySelector('#bills-table tbody');
+        if (!tableBody) return;
+
+        tableBody.innerHTML = '';
+        filteredBills.forEach(bill => {
+            const patient = patients.find(p => p.id === bill.patientId);
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${bill.id}</td>
+                <td>${patient ? `${patient.firstName} ${patient.lastName}` : 'N/A'}</td>
+                <td>${formatCurrency(bill.amount)}</td>
+                <td>${formatDate(bill.date)}</td>
+                <td><span class="status-badge ${bill.status}">${bill.status}</span></td>
+                <td>
+                    <button class="btn btn-sm" onclick="openBillModal('${bill.id}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteBill('${bill.id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            tableBody.appendChild(row);
+        });
+    }
+}
+
+// Notification System
 function setupNotifications() {
-    const notificationBtn = document.querySelector('.notifications');
-    if (notificationBtn) {
-        notificationBtn.addEventListener('click', toggleNotifications);
+    const notificationsBtn = document.querySelector('.notifications');
+    if (notificationsBtn) {
+        notificationsBtn.addEventListener('click', toggleNotifications);
     }
 }
 
 function toggleNotifications() {
-    const dropdown = document.querySelector('.notification-dropdown');
-    if (dropdown) {
-        dropdown.classList.toggle('active');
+    const existingDropdown = document.querySelector('.notification-dropdown');
+    if (existingDropdown) {
+        existingDropdown.remove();
+        return;
     }
-}
 
-// View Buttons
-function setupViewButtons() {
-    document.addEventListener('click', (e) => {
-        const viewBtn = e.target.closest('.btn .fa-eye');
-        if (viewBtn) {
-            const row = viewBtn.closest('tr');
-            const id = row.cells[0].textContent;
-            if (row.closest('#recent-appointments')) {
-                openAppointmentModal(id);
-            } else if (row.closest('#recent-patients')) {
-                openPatientModal(id);
-            }
+    const lowInventory = inventory.filter(item => item.quantity <= 10);
+    const pendingBills = bills.filter(bill => bill.status === 'pending');
+    const occupiedWards = wards.filter(ward => ward.status === 'occupied');
+
+    const notifications = [
+        ...lowInventory.map(item => `Low inventory: ${item.name} (${item.quantity} left)`),
+        ...pendingBills.map(bill => `Pending bill for patient ID: ${bill.patientId} (${formatCurrency(bill.amount)})`),
+        ...occupiedWards.map(ward => `Ward ${ward.number} is occupied`)
+    ];
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'notification-dropdown';
+    dropdown.style.position = 'absolute';
+    dropdown.style.top = '60px';
+    dropdown.style.right = '20px';
+
+    if (notifications.length === 0) {
+        dropdown.innerHTML = '<div class="notification-item">No new notifications</div>';
+    } else {
+        dropdown.innerHTML = notifications.map(note => `
+            <div class="notification-item">
+                <i class="fas fa-bell"></i>
+                <span>${note}</span>
+            </div>
+        `).join('');
+    }
+
+    document.body.appendChild(dropdown);
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function closeDropdown(e) {
+        if (!dropdown.contains(e.target) && e.target !== notificationsBtn) {
+            dropdown.remove();
+            document.removeEventListener('click', closeDropdown);
         }
     });
+}
+
+// View Buttons Setup (Placeholder for future detailed views)
+function setupViewButtons() {
+    // Implement detailed view functionality if needed
 }
 
 // Form Validation
@@ -1387,11 +1953,12 @@ function setupFormValidation() {
     forms.forEach(form => {
         form.addEventListener('submit', (e) => {
             let isValid = true;
-            form.querySelectorAll('input[required], select[required], textarea[required]').forEach(field => {
-                if (!field.value.trim()) {
+            const inputs = form.querySelectorAll('input[required], select[required], textarea[required]');
+            inputs.forEach(input => {
+                if (!input.value.trim()) {
                     isValid = false;
-                    field.classList.add('invalid');
-                    setTimeout(() => field.classList.remove('invalid'), 1000);
+                    input.classList.add('invalid');
+                    input.addEventListener('input', () => input.classList.remove('invalid'), { once: true });
                 }
             });
             if (!isValid) {
